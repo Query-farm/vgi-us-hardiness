@@ -1,16 +1,31 @@
 # Private graders for the public vgi.agent_test_tasks in the worker's catalog metadata.
-# `vgi-lint lint --ai` runs an agent on each prompt and grades it with check_sql.
-# See https://github.com/Query-farm/vgi-lint-check (VGI920).
+# `vgi-lint lint --ai` runs an agent on each prompt and grades it with reference_sql / check_sql.
+# See https://github.com/Query-farm/vgi-lint-check (VGI920). All data is bundled, so every
+# grader is deterministic.
 tasks:
-  - name: formal_greeting
-    reference_sql: SELECT starter.main.greet('Grace', 'formal') AS greeting
-  - name: sum_of_squares
-    reference_sql: SELECT sum(squared) AS total FROM starter.main.sequence_table(10)
-  - name: stepped_sequence
-    reference_sql: SELECT n FROM starter.main.sequence_table(4, step := 5) ORDER BY n
-  # Reads the public demo API (https://vgi-starter-api.query-farm.services/v1).
-  - name: items_per_category
-    check_sql: >-
-      SELECT count(*) = 3 AND sum(items) = 25
-      FROM (SELECT category, count(*) AS items
-            FROM starter.main.fetch_items('https://vgi-starter-api.query-farm.services/v1') GROUP BY category)
+  - name: zone_7_celsius_band
+    reference_sql: SELECT min_temp_c_low, min_temp_c_high FROM us_hardiness.main.zones WHERE half_zone = '7a'
+  # Reads the Hawaii grid (downloaded once, under 1 MB, into the cache).
+  - name: honolulu_point_zone
+    reference_sql: SELECT us_hardiness.main.zone_for_point(21.3069, -157.8583).half_zone AS half_zone
+  - name: red_maple_min_temp
+    reference_sql: SELECT min_temp_f_low, min_temp_f_high FROM us_hardiness.main.plants WHERE symbol = 'ACRU'
+  - name: red_maple_flower_color
+    reference_sql: >-
+      SELECT value FROM us_hardiness.main.plant_characteristics
+      WHERE symbol = 'ACRU' AND characteristic = 'Flower Color'
+  - name: grid_regions
+    reference_sql: SELECT region FROM us_hardiness.main.grids ORDER BY region
+  - name: zone_of_zip
+    reference_sql: SELECT us_hardiness.main.zone_for_zip('10001').half_zone AS half_zone
+  - name: zone_of_temperature_celsius
+    reference_sql: SELECT us_hardiness.main.zone_for_temperature(-20.0, 'C') AS half_zone
+  - name: zips_per_zone_alaska
+    reference_sql: >-
+      SELECT zone, count(*) AS zips FROM us_hardiness.main.zip_zones
+      WHERE region = 'alaska' GROUP BY zone ORDER BY zone
+  - name: native_trees_zone_4a_mn
+    reference_sql: >-
+      SELECT count(*) AS trees
+      FROM us_hardiness.main.plants_for_zone('4a', state := 'MN', native_only := true)
+      WHERE list_contains(growth_habit, 'Tree')

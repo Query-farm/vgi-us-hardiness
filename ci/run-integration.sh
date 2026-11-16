@@ -13,10 +13,10 @@
 # Optional:
 #   TRANSPORT         stdio | launch | http                        (default: stdio)
 #   HAYBARN_UNITTEST  path to haybarn-unittest   (default: the one on PATH)
-#   PYTHON            command for the mock API, may contain spaces (default: python3)
+#   PYTHON            python command, may contain spaces (default: python3)
 #   MIN_EXECUTED      fail if fewer test cases ran (default: 1)
 #   EXPECTED_SKIP_REASONS  newline-separated skip reasons that are allowed,
-#                     e.g. "require-env STARTER_LIVE". Any other skip fails.
+#                     e.g. "require-env US_HARDINESS_LIVE". Any other skip fails.
 #   RECIPES_WORKER    command that runs a recipe by name (`$RECIPES_WORKER <recipe>`);
 #                     when set, examples/test/*.test run too (stdio/launch only)
 #   KEEP_STAGE=1      keep the staged test tree for debugging
@@ -71,22 +71,18 @@ start_server() {
   echo "::error::'$*' never printed PORT:<n>"; cat "$log"; return 1
 }
 
-# The mock APIs fetch_items is tested against. The plain one rate-limits every
-# page once (429 + Retry-After) so the retry path is always exercised.
-unset STARTER_API_TOKEN
-MOCK_API_FLAKY=1 start_server "$STAGE/mock.log" $PYTHON "$REPO/test/mock_api/server.py"
-export STARTER_MOCK_API="http://127.0.0.1:$PORT"
-MOCK_API_TOKEN=test-token start_server "$STAGE/mock-auth.log" $PYTHON "$REPO/test/mock_api/server.py"
-export STARTER_MOCK_API_AUTH="http://127.0.0.1:$PORT"
+# Offline copies (Hawaii, Puerto Rico) and crops (CONUS, Alaska) of the PRISM grids that
+# zone_for_point reads; the SQL tests point the `grid_url` ATTACH option at them.
+export US_HARDINESS_GRID_FIXTURES="$REPO/test/fixtures/grids"
 
 HTTP=0
 case "$TRANSPORT" in
-  stdio)  export STARTER_WORKER="$WORKER" ;;
-  launch) export STARTER_WORKER="launch:$WORKER" ;;
+  stdio)  export US_HARDINESS_WORKER="$WORKER" ;;
+  launch) export US_HARDINESS_WORKER="launch:$WORKER" ;;
   http)
     HTTP=1
     start_server "$STAGE/worker.log" "$WORKER" --http --port 0
-    export STARTER_WORKER="http://127.0.0.1:$PORT"
+    export US_HARDINESS_WORKER="http://127.0.0.1:$PORT"
     ;;
   *) echo "::error::unknown TRANSPORT=$TRANSPORT (expected stdio|launch|http)"; exit 1 ;;
 esac
@@ -124,10 +120,10 @@ EOF
 rm -f "$STAGE/test/_warm.test"
 
 cat > "$STAGE/no_error_skip.json" <<'EOF'
-{"skip_error_messages": ["__vgi_starter_never_matches__"]}
+{"skip_error_messages": ["__vgi_us_hardiness_never_matches__"]}
 EOF
 
-echo "Running test/sql over $TRANSPORT (worker: $STARTER_WORKER)"
+echo "Running test/sql over $TRANSPORT (worker: $US_HARDINESS_WORKER)"
 LOG="$STAGE/unittest.log"
 rc=0
 ( cd "$STAGE" && "$HAYBARN_UNITTEST" --keep-home --test-dir "$STAGE" \
@@ -154,7 +150,7 @@ echo "executed $executed of $total test files over $TRANSPORT ($skipped skipped)
 if [ "$executed" -lt "$MIN_EXECUTED" ]; then
   echo "::error::only $executed test files ran (MIN_EXECUTED=$MIN_EXECUTED)"; rc=1
 fi
-if [ "$HTTP" = "1" ] && ! kill -0 "${PIDS[2]}" 2>/dev/null; then
+if [ "$HTTP" = "1" ] && ! kill -0 "${PIDS[0]}" 2>/dev/null; then
   echo "::error::the HTTP worker died during the run:"; cat "$STAGE/worker.log"; rc=1
 fi
 exit "$rc"

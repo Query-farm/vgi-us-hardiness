@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -956,10 +956,11 @@ http = [
 ]
 
 [[package]]
-name = "vgi-starter-worker"
+name = "vgi-us-hardiness-worker"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "truststore" },
     { name = "vgi-python", extra = ["http"] },
 ]
 
@@ -973,7 +974,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "vgi-python", extras = ["http"], specifier = ">=0.51.1,<0.52" }]
+requires-dist = [
+    { name = "truststore", specifier = ">=0.10" },
+    { name = "vgi-python", extras = ["http"], specifier = ">=0.51.1,<0.52" },
+]
 
 [package.metadata.requires-dev]
 dev = [

@@ -6,9 +6,9 @@ FROM python:3.13-slim
 
 ARG VERSION=0.0.0
 ARG GIT_COMMIT=unknown
-LABEL org.opencontainers.image.title="vgi-starter-worker" \
-      org.opencontainers.image.description="A VGI worker for DuckDB" \
-      org.opencontainers.image.source="https://github.com/Query-farm/vgi-starter-python" \
+LABEL org.opencontainers.image.title="vgi-us-hardiness-worker" \
+      org.opencontainers.image.description="USDA plant hardiness zones and USDA PLANTS data for DuckDB (VGI worker)" \
+      org.opencontainers.image.source="https://github.com/Query-farm/vgi-us-hardiness" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${GIT_COMMIT}" \
       org.opencontainers.image.licenses="0BSD"

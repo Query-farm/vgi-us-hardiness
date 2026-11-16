@@ -1,0 +1,194 @@
+# name: test/sql/us_hardiness.test
+# description: SQL-level tests for the us_hardiness worker, run through DuckDB by ci/run-integration.sh
+# group: [us_hardiness]
+
+require vgi
+
+require-env US_HARDINESS_WORKER
+
+require-env US_HARDINESS_GRID_FIXTURES
+
+statement ok
+ATTACH 'us_hardiness' (TYPE vgi, LOCATION '{US_HARDINESS_WORKER}', cache_dir '__TEST_DIR__/grid-cache', grid_url '{US_HARDINESS_GRID_FIXTURES}');
+
+# ---------------------------------------------------------------- zone_for_temperature
+
+query TT
+SELECT us_hardiness.main.zone_for_temperature(0.0), us_hardiness.main.zone_for_temperature(-0.5);
+----
+7a	6b
+
+query T
+SELECT us_hardiness.main.zone_for_temperature(t) FROM (VALUES (-60.0), (-60.5), (69.9), (70.0), (NULL)) v(t) ORDER BY t NULLS LAST;
+----
+NULL
+1a
+13b
+NULL
+NULL
+
+query TT
+SELECT us_hardiness.main.zone_for_temperature(-20.0, 'C'), us_hardiness.main.zone_for_temperature(10.0, 'F');
+----
+6b	8a
+
+statement error
+SELECT us_hardiness.main.zone_for_temperature(1.0, 'K');
+----
+<REGEX>:.*
+
+# More than one input batch (DuckDB vectors are 2,048 rows).
+query II
+SELECT count(*), count(DISTINCT us_hardiness.main.zone_for_temperature((i % 130)::DOUBLE - 60.0)) FROM range(10000) t(i);
+----
+10000	26
+
+# ---------------------------------------------------------------- zones table
+
+query TIIRR
+SELECT half_zone, min_temp_f_low, min_temp_f_high, min_temp_c_low, min_temp_c_high FROM us_hardiness.main.zones WHERE zone = 7 ORDER BY zone_index;
+----
+7a	0	5	-17.78	-15.0
+7b	5	10	-15.0	-12.22
+
+query I
+SELECT count(*) FROM us_hardiness.main.zones;
+----
+26
+
+# ---------------------------------------------------------------- zone_for_zip / zip_zones
+
+query TTII
+SELECT z, r.half_zone, r.zone, r.min_temp_f_low FROM (SELECT z, us_hardiness.main.zone_for_zip(z) AS r FROM (VALUES ('10001'), ('97201-1234'), ('99501'), ('96813'), ('00901'), ('501'), ('00000'), ('bogus'), (NULL)) v(z)) ORDER BY z NULLS LAST;
+----
+00000	NULL	NULL	NULL
+00901	13b	13	65
+10001	7b	7	5
+501	7b	7	5
+96813	12b	12	55
+97201-1234	8b	8	15
+99501	5a	5	-20
+bogus	NULL	NULL	NULL
+NULL	NULL	NULL	NULL
+
+query T
+SELECT us_hardiness.main.zone_for_zip('99501').region;
+----
+alaska
+
+query II
+SELECT count(*), count(DISTINCT zip) FROM us_hardiness.main.zip_zones;
+----
+40502	40502
+
+query II
+SELECT zone, count(*) FROM us_hardiness.main.zip_zones WHERE region = 'puerto_rico' GROUP BY zone ORDER BY zone;
+----
+11	2
+12	48
+13	126
+
+# Join a user table on ZIP: every listed ZIP agrees with the scalar.
+query I
+SELECT count(*) FROM us_hardiness.main.zip_zones z WHERE z.region = 'hawaii' AND us_hardiness.main.zone_for_zip(z.zip).half_zone = z.half_zone;
+----
+133
+
+# ---------------------------------------------------------------- zone_for_point (fixture grids, offline)
+
+query TIRRT
+SELECT p.half_zone, p.zone, p.min_temp_f, p.min_temp_c, p.region FROM (SELECT us_hardiness.main.zone_for_point(45.5152, -122.6784) AS p);
+----
+9a	9	22.0	-5.56	conus
+
+query TT
+SELECT p.half_zone, p.region FROM (SELECT us_hardiness.main.zone_for_point(lat, lon) AS p, name FROM (VALUES ('anchorage', 61.2181, -149.9003), ('honolulu', 21.3069, -157.8583), ('san_juan', 18.4655, -66.1057)) v(name, lat, lon)) ORDER BY name;
+----
+5b	alaska
+12b	hawaii
+13b	puerto_rico
+
+# Off every grid (ocean, Australia) and NULL input give NULL.
+query TTT
+SELECT us_hardiness.main.zone_for_point(30.0, -140.0), us_hardiness.main.zone_for_point(-33.9, 151.2), us_hardiness.main.zone_for_point(NULL, -122.0);
+----
+NULL	NULL	NULL
+
+query TT
+SELECT region, cached FROM us_hardiness.main.grids ORDER BY region;
+----
+alaska	true
+conus	true
+hawaii	true
+puerto_rico	true
+
+query I
+SELECT count(*) FROM us_hardiness.main.grids WHERE expected_sha256 IS NULL AND cache_path LIKE '%grid-cache%';
+----
+4
+
+# ---------------------------------------------------------------- plants
+
+query TTIIT
+SELECT symbol, common_name, min_temp_f_low, min_temp_f_high, plant_min_zone_derived FROM us_hardiness.main.plants WHERE symbol = 'ACRU';
+----
+ACRU	red maple	-47	-43	2b
+
+query III
+SELECT count(*), count(*) FILTER (WHERE is_accepted), count(*) FILTER (WHERE has_characteristics) FROM us_hardiness.main.plants;
+----
+93144	48990	2186
+
+query T
+SELECT list_contains(states, 'MN') AND list_contains(growth_habit, 'Tree') FROM us_hardiness.main.plants WHERE symbol = 'ACRU';
+----
+true
+
+query T
+SELECT accepted_symbol FROM us_hardiness.main.plants WHERE NOT is_accepted AND symbol = 'ABAM5';
+----
+ABAB
+
+query TT
+SELECT characteristic, value FROM us_hardiness.main.plant_characteristics WHERE symbol = 'ACRU' AND characteristic IN ('Flower Color', 'Shade Tolerance') ORDER BY characteristic;
+----
+Flower Color	Red
+Shade Tolerance	Intermediate
+
+query I
+SELECT count(*) FROM us_hardiness.main.plant_characteristics;
+----
+169387
+
+# ---------------------------------------------------------------- plants_for_zone
+
+query I
+SELECT count(*) FROM us_hardiness.main.plants_for_zone('4a', state := 'MN', native_only := true) WHERE list_contains(growth_habit, 'Tree');
+----
+95
+
+query I
+SELECT count(*) FROM us_hardiness.main.plants_for_zone('3a') WHERE plant_min_zone_derived NOT IN ('1a', '1b', '2a', '2b', '3a');
+----
+0
+
+query I
+SELECT count(*) FROM us_hardiness.main.plants_for_zone('7');
+----
+1599
+
+# Composes with zone_for_zip.
+query T
+SELECT count(*) > 0 FROM us_hardiness.main.plants_for_zone(us_hardiness.main.zone_for_zip('55401').half_zone, state := 'MN', native_only := true);
+----
+true
+
+statement error
+SELECT count(*) FROM us_hardiness.main.plants_for_zone('14a');
+----
+<REGEX>:.*
+
+statement error
+SELECT count(*) FROM us_hardiness.main.plants_for_zone('5a', state := 'Minnesota');
+----
+<REGEX>:.*
