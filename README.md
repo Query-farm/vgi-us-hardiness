@@ -35,7 +35,7 @@ worker answers both questions in SQL using two public sources:
   that PLANTS publishes for 2,186 accepted taxa.
 
 ```sql
-ATTACH 'us_hardiness' (TYPE vgi, LOCATION 'uvx --from git+https://github.com/Query-farm/vgi-us-hardiness@v0.1.0 vgi-us-hardiness-worker');
+ATTACH 'us_hardiness' (TYPE vgi, LOCATION 'uvx --from git+https://github.com/Query-farm/vgi-us-hardiness@v0.1.1 vgi-us-hardiness-worker');
 
 SELECT us_hardiness.main.zone_for_zip('10001').half_zone;                 -- 7b
 SELECT us_hardiness.main.zone_for_point(45.5152, -122.6784);              -- {half_zone: 9a, zone: 9, min_temp_f: 22.0, ...}
@@ -127,7 +127,7 @@ SET allow_extension_repositories = 'allowed';
 CREATE EXTENSION REPOSITORY IF NOT EXISTS query_farm WITH PREFIX 'https://duckdb-extensions.query.farm';
 INSTALL vgi FROM query_farm;
 LOAD vgi FROM query_farm;
-ATTACH 'us_hardiness' (TYPE vgi, LOCATION 'uvx --from git+https://github.com/Query-farm/vgi-us-hardiness@v0.1.0 vgi-us-hardiness-worker');
+ATTACH 'us_hardiness' (TYPE vgi, LOCATION 'uvx --from git+https://github.com/Query-farm/vgi-us-hardiness@v0.1.1 vgi-us-hardiness-worker');
 ```
 
 Or build it from a clone:
