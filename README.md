@@ -118,7 +118,7 @@ cache; grids are fetched again on demand.
 
 ## Quick start
 
-**Prerequisites:** Python 3.13+ and [uv](https://docs.astral.sh/uv/).
+**Prerequisites:** Python 3.14+ and [uv](https://docs.astral.sh/uv/).
 
 Run it straight from a release tag:
 
